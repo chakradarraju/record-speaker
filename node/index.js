@@ -1,6 +1,7 @@
 const portAudio = require('naudiodon');
 const fs = require('fs');
 const wavefile = require('wavefile');
+const streamBuffers = require('stream-buffers');
 
 const play = function(file) {
   // Create an instance of AudioIO with outOptions, which will return a WritableStream
@@ -24,35 +25,34 @@ const play = function(file) {
 
 const record = function(file) {
   // Create an instance of AudioIO with inOptions, which will return a ReadableStream
+  const channels = 2;
+  const rate = 44100;
   var ai = new portAudio.AudioIO({
     inOptions: {
-      channelCount: 1,
+      channelCount: channels,
       sampleFormat: portAudio.SampleFormat16Bit,
-      sampleRate: 44100,
-      deviceId: -1 // Use -1 or omit the deviceId to select the default device
+      sampleRate: rate,
+      deviceId: -1,  // Use -1 or omit the deviceId to select the default device
     }
   });
 
-  // Create a write stream to write out to a raw audio file
-  var ws = fs.createWriteStream(file);
-  ws.write(getWavHeaders(1, 44100, '16'), null, () => {
-    console.log('starting');
-    //Start streaming
-    ai.pipe(ws);
-    ai.start();
-    console.log('done');
-  });
+  const buffer = new streamBuffers.WritableStreamBuffer();
+  ai.pipe(buffer);
+  ai.start();
 
   process.on('SIGINT', () => {
     console.log('Received SIGINT. Stopping recording.');
-    ai.quit();
+    ai.quit(() => {
+      const ws = fs.createWriteStream(file);
+      const wav = new wavefile();
+      wav.fromScratch(channels, rate, '16', new Int16Array(buffer.getContents().buffer));
+      ws.write(wav.toBuffer());
+      ws.end();
+      ws.on('close', () => {
+        console.log('bytes written: ' + ws.bytesWritten);
+      });
+    });
   });
-}
-
-const getWavHeaders = function(channels, rate, sampleSize) {
-  const wav = new wavefile();
-  wav.fromScratch(channels, rate, sampleSize, []);
-  return wav.toBuffer();
 }
 
 record('record.wav');
