@@ -43,14 +43,12 @@ const record = function(file) {
   process.on('SIGINT', () => {
     console.log('Received SIGINT. Stopping recording.');
     ai.quit(() => {
-      const ws = fs.createWriteStream(file);
       const wav = new wavefile();
       wav.fromScratch(channels, rate, '16', new Int16Array(buffer.getContents().buffer));
+      const ws = fs.createWriteStream(file);
       ws.write(wav.toBuffer());
       ws.end();
-      ws.on('close', () => {
-        console.log('bytes written: ' + ws.bytesWritten);
-      });
+      ws.on('close', () => console.log('bytes written: ' + ws.bytesWritten));
     });
   });
 }
